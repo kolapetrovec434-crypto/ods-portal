@@ -1,0 +1,177 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(uuid())
+  discordId       String    @unique
+  username        String
+  passwordHash    String
+  avatar          String?
+  bio             String?
+  profileColor    String    @default("#5865F2")
+  banner          String?
+  socialLinks     Json?
+
+  level           Int       @default(1)
+  xp              Int       @default(0)
+  points          Int       @default(0)
+  warningsCount   Int       @default(0)
+  reprimandsCount Int       @default(0)
+
+  isBanned        Boolean   @default(false)
+  banReason       String?
+  banExpiresAt    DateTime?
+
+  roleId          String?
+  role            Role?     @relation(fields: [roleId], references: [id])
+  tags            Tag[]     @relation("UserTags")
+
+  inventory             InventoryItem[]
+  pointsHistoryGiven    PointLog[]  @relation("GivenPoints")
+  pointsHistoryReceived PointLog[]  @relation("ReceivedPoints")
+  systemLogs            SystemLog[]
+  userTasks             UserTask[]
+  refreshTokens         RefreshToken[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Role {
+  id                String   @id @default(uuid())
+  name              String   @unique
+  color             String   @default("#ffffff")
+  priority          Int      @default(0)
+
+  canGivePoints     Boolean  @default(false)
+  canTakePoints     Boolean  @default(false)
+  canWarn           Boolean  @default(false)
+  canReprimand      Boolean  @default(false)
+  canBan            Boolean  @default(false)
+  canUnban          Boolean  @default(false)
+  canManageTags     Boolean  @default(false)
+  canManageRoles    Boolean  @default(false)
+  canManageModPass  Boolean  @default(false)
+  canViewStats      Boolean  @default(false)
+  isOwner           Boolean  @default(false)
+
+  users             User[]
+}
+
+model Tag {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  color       String
+  icon        String?
+  description String?
+  users       User[]   @relation("UserTags")
+}
+
+model PointLog {
+  id          String   @id @default(uuid())
+  amount      Int
+  reason      String
+  issuerId    String
+  issuer      User     @relation("GivenPoints",   fields: [issuerId],   references: [id])
+  receiverId  String
+  receiver    User     @relation("ReceivedPoints", fields: [receiverId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model ModPassSeason {
+  id        String         @id @default(uuid())
+  name      String
+  isActive  Boolean        @default(false)
+  startsAt  DateTime
+  endsAt    DateTime
+  levels    ModPassLevel[]
+  tasks     Task[]
+}
+
+model ModPassLevel {
+  id          String        @id @default(uuid())
+  seasonId    String
+  season      ModPassSeason @relation(fields: [seasonId], references: [id])
+  levelNumber Int
+  requiredXp  Int
+  rewards     Reward[]
+
+  @@unique([seasonId, levelNumber])
+}
+
+model Task {
+  id          String        @id @default(uuid())
+  seasonId    String
+  season      ModPassSeason @relation(fields: [seasonId], references: [id])
+  title       String
+  description String
+  rewardXp    Int
+  type        String        // REPORTS | POINTS_GIVEN | ONLINE_STREAK | PATROL
+  target      Int           @default(1)
+  expiresAt   DateTime?
+  isWeekly    Boolean       @default(true)
+  userTasks   UserTask[]
+}
+
+model UserTask {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id])
+  progress  Int      @default(0)
+  isDone    Boolean  @default(false)
+  doneAt    DateTime?
+
+  @@unique([userId, taskId])
+}
+
+model Reward {
+  id        String        @id @default(uuid())
+  levelId   String?
+  level     ModPassLevel? @relation(fields: [levelId], references: [id])
+  name      String
+  type      String        // REDUCE_QUOTA | REMOVE_WARN | BONUS_POINTS | BADGE
+  value     Int
+  icon      String?
+  inventory InventoryItem[]
+}
+
+model InventoryItem {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  rewardId   String
+  reward     Reward   @relation(fields: [rewardId], references: [id])
+  isUsed     Boolean  @default(false)
+  usedAt     DateTime?
+  acquiredAt DateTime @default(now())
+}
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
